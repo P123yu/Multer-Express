@@ -1,0 +1,387 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+datasource db {
+  provider = "mysql"         
+  url      = env("DATABASE_URL")
+}
+
+
+
+
+// Student model
+
+model Student {
+  id    Int    @id @default(autoincrement())
+  roll  BigInt
+  name  String
+  image Bytes? 
+  createdAt DateTime @default(now())
+}
+
+// College model
+
+model  College{
+  id    Int    @id @default(autoincrement())
+  name  String
+  city  String?
+  rank  Int
+  createdAt DateTime @default(now())
+}
+
+
+
+===========================================================================================================================
+
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient({
+  log: ["query"],
+});
+
+export { prisma };
+
+
+
+===========================================================================================================================
+
+import {
+  createCollege,
+  deleteById,
+  readAll,
+  readById,
+  update,
+} from "../service/collegeService.js";
+
+const createCollegeController = async (req, res) => {
+  const result = await createCollege(req.body);
+  if (result.success) {
+    res.status(201).json(result.data);
+  } else {
+    res.status(400).json({ error: result.error });
+  }
+};
+
+const readAllController = async (req, res) => {
+  const result = await readAll();
+  if (result.success) {
+    res.status(200).json(result.data);
+  } else {
+    res.status(404).json({ error: result.error });
+  }
+};
+
+const readByIdController = async (req, res) => {
+  const result = await readById(req.params.id);
+  if (result.success) {
+    res.status(200).json(result.data);
+  } else {
+    res.status(404).json({ error: result.error });
+  }
+};
+
+const updateController = async (req, res) => {
+  const result = await update(req.params.id, req.body);
+  if (result.success) {
+    res.status(200).json(result.data);
+  } else {
+    res.status(404).json({ error: result.error });
+  }
+};
+
+const deleteController = async (req, res) => {
+  const result = await deleteById(req.params.id);
+  if (result.success) {
+    res.status(200).json(result.data);
+  } else {
+    res.status(404).json(result.error);
+  }
+};
+
+export {
+  createCollegeController,
+  deleteController,
+  readAllController,
+  readByIdController,
+  updateController,
+};
+
+
+==========================================================================================================================
+
+import { createStudent, fetchById } from "../service/studentService.js";
+
+const createStudentController = async (req, res) => {
+  try {
+    const studentData = {
+      ...req.body,
+      image: req.file.buffer,
+    };
+    const result = await createStudent(studentData);
+    if (result.success) {
+      res.status(201).json(result.data);
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+const fetchByIdController = async (req, res) => {
+  const result = await fetchById(req.params.id);
+  if (result.success) {
+    res.status(200).json(result.data);
+  } else {
+    res.status(404).json(result.error);
+  }
+};
+
+export { createStudentController, fetchByIdController };
+
+
+
+============================================================================================================================
+
+// convert bigInt to string
+
+export const stringifyBigInts = (obj) => {
+    return JSON.parse(
+      JSON.stringify(obj, (_, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      )
+    );
+  };
+
+
+==============================================================================================================================
+
+import express from "express";
+import studentRoute from "./studentRoute.js";
+import collegeRoute from "./collegeRoute.js"
+
+const router = express.Router();
+
+router.use("/student", studentRoute);
+router.use("/college", collegeRoute);
+
+
+export default router;
+
+===============================================================================================================================
+
+import express from "express";
+import {
+  createCollegeController,
+  deleteController,
+  readAllController,
+  readByIdController,
+  updateController,
+} from "../controller/collegeController.js";
+
+const router = express.Router();
+
+// create
+router.post("/create", createCollegeController);
+
+// readAll
+router.get("/read", readAllController);
+
+// readById
+router.get("/read-id/:id", readByIdController);
+
+// update
+router.put("/update/:id", updateController);
+
+// delete
+router.delete("/delete/:id", deleteController);
+
+export default router;
+
+
+============================================================================================================================
+
+import express from "express";
+import multer from "multer";
+import {
+  createStudentController,
+  fetchByIdController,
+} from "../controller/studentController.js";
+
+const router = express.Router();
+
+// multer
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+// create
+router.post("/create", upload.single("image"), createStudentController);
+
+// fetchById
+router.get("/get/:id", fetchByIdController);
+
+export default router;
+
+==============================================================================================================================
+
+import { prisma } from "../config/prismaClient.js";
+
+const createCollege = async (collegeBody) => {
+  try {
+    const college = await prisma.College.create({ data: collegeBody });
+    return { success: true, data: college };
+  } catch (error) {
+    return { success: false, error: "college not created" };
+  }
+};
+
+const readAll = async () => {
+  try {
+    const collegeList = await prisma.College.findMany();
+    return { success: true, data: collegeList };
+  } catch (error) {
+    return { success: false, error: "error while fetching list of colleges" };
+  }
+};
+
+const readById = async (id) => {
+  try {
+    const college = await prisma.College.findUnique({
+      where: { id: parseInt(id) },
+    });
+    return { success: true, data: college };
+  } catch (error) {
+    return { success: false, error: "college of id " + id + "not found" };
+  }
+};
+
+const update = async (id, body) => {
+  try {
+    const college = await prisma.College.update({
+      where: { id: parseInt(id) },
+      data: body,
+    });
+    return { success: true, data: college };
+  } catch (error) {
+    return { success: false, error: `can't update based on id ${id}` };
+  }
+};
+
+const deleteById = async (id) => {
+  try {
+    const deletedData = await prisma.College.delete({
+      where: { id: parseInt(id) },
+    });
+    return { success: true, data: deletedData };
+  } catch (error) {
+    return { success: false, error: "error while deleting id " + id };
+  }
+};
+
+export { createCollege, deleteById, readAll, readById, update };
+
+
+============================================================================================================================
+
+import { prisma } from "../config/prismaClient.js";
+import { stringifyBigInts } from "../converter/bigIntToString.js";
+
+// const createStudent = async (studentData) => {
+//   try {
+//     const student = await prisma.student.create({
+//       data: studentData,
+//     });
+
+//     const updatedStudent = {
+//       ...student,
+//       roll: student.roll.toString(),
+//     };
+
+//     return { success: true, data: updatedStudent };
+//   } catch (error) {
+//     console.error("Error creating student:", error);
+//     return { success: false, error: "Bad request" };
+//   }
+// };
+
+const createStudent = async (studentData) => {
+  try {
+    const student = await prisma.student.create({
+      data: studentData,
+    });
+
+    // const updatedStudent = {
+    //   ...student,
+    //   roll: bigIntToString(student.roll),
+    // };
+
+    return { success: true, data: stringifyBigInts(student) };
+  } catch (error) {
+    console.error("Error creating student:", error);
+    return { success: false, error: "Bad request" };
+  }
+};
+
+const fetchById = async (id) => {
+  try {
+    const student = await prisma.student.findUnique({
+      where: { id: parseInt(id) },
+    });
+    const updatedStudent = {
+      ...student,
+      image: student.image
+        ? `data:image/jpeg;base64,${Buffer.from(student.image).toString(
+            "base64"
+          )}`
+        : null,
+    };
+    return { success: true, data: stringifyBigInts(updatedStudent) };
+  } catch (error) {
+    return { success: false, error: "not found" };
+  }
+};
+
+export { createStudent, fetchById };
+
+
+============================================================================================================================
+
+// .env
+
+DATABASE_URL="mysql://cmsusr:CmS&TrinitY@123@10.30.4.144:3306/CitizenPortalCMS"
+PORT=5000
+
+============================================================================================================================
+
+import dotenv from "dotenv";
+import express from "express";
+import routes from "./src/route/appRoute.js";
+
+dotenv.config(); // Load environment variables from .env file
+
+const app = express();
+
+// while post parse the body
+app.use(express.json());
+
+app.use(routes);
+
+const PORT = process.env.PORT;
+app.listen(PORT, () => {
+  console.log("server started on port " + PORT);
+});
+
+
+
+
+
+  
+
