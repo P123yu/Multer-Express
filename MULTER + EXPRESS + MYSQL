@@ -1,0 +1,193 @@
+
+
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+datasource db {
+  provider = "mysql"         
+  url      = env("DATABASE_URL")
+}
+
+
+model Student {
+  id    Int    @id @default(autoincrement())
+  name  String
+  city  String
+  image Bytes? // This will store the image as a byte array
+}
+
+
+
+
+// src => config => prismaClient.js =======================================================================================
+
+import { PrismaClient } from "@prisma/client";
+
+export const prisma = new PrismaClient({
+  log: ["query"],
+});
+
+// src => controller => studentController.js  =============================================================================
+
+// import createStudent from "../service/studentService.js";
+
+// const createStud = async (req, res) => {
+//   console.log(req.body);
+//   const result = await createStudent(req.body);
+//   if (result.success) {
+//     res.status(201).json(result.data);
+//   } else {
+//     res.status(400).json({ error: result.error });
+//   }
+// };
+
+// export default createStud;
+
+
+
+import createStudent from "../service/studentService.js";
+
+// This function just processes the request
+const createStud = async (req, res) => {
+  try {
+    // console.log("Body:", req.body);        // name, city, etc.
+    // console.log("File:", req.file);        // the uploaded image
+
+    // Combine form data and file into one object
+    const studentData = {
+      ...req.body,
+      image: req.file,  // or req.file.buffer if you store it in DB
+    };
+
+    const result = await createStudent(studentData);
+
+    if (result.success) {
+      res.status(201).json(result.data);
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+export default createStud;
+
+
+
+// src => service => studentService.js  =============================================================================
+
+// import { prisma } from "../config/prismaClient.js";
+
+// const createStudent = async (studentData) => {
+//   try {
+//     const student = await prisma.student.create({
+//       data: studentData,
+//     });
+//     console.log(student, "student");
+//     return { success: true, data: student };
+//   } catch (error) {
+//     return { success: false, error: "bad request" };
+//   }
+// };
+
+// export default createStudent;
+
+import { prisma } from "../config/prismaClient.js";
+
+const createStudent = async (studentData) => {
+  try {
+    // If an image is provided, handle it as a byte array
+    if (studentData.image) {
+      const imageBuffer = studentData.image.buffer; // Get the raw byte data from the uploaded file
+      studentData.image = imageBuffer; // Store it as a byte array
+    }
+
+    // Create a new student in the database
+    const student = await prisma.student.create({
+      data: studentData, // Pass the student data with the image as byte array
+    });
+
+    return { success: true, data: student };
+  } catch (error) {
+    console.error("Error creating student:", error);
+    return { success: false, error: "Bad request" };
+  }
+};
+
+export default createStudent;
+
+
+
+// route => mainRoute.js ==========================================================================================
+
+import express from "express";
+import studentRoute from "./studentRoute.js";
+
+const router = express.Router();
+
+router.use("/api/student", studentRoute);
+
+export default router;
+
+
+// route => studentRoute.js =========================================================================================
+
+// import express from "express";
+// import createStud from "../controller/studentController.js";
+
+// const router = express.Router();
+
+// router.post("/add", createStud);
+
+// export default router;
+
+import express from "express";
+import multer from "multer";
+import createStud from "../controller/studentController.js";
+
+const router = express.Router();
+const storage = multer.memoryStorage(); // or multer.diskStorage(...) if saving to disk
+const upload = multer({ storage });
+
+// Use multer middleware here
+router.post("/add", upload.single("image"), createStud);
+
+export default router;
+
+// .env =============================================================================================================
+
+DATABASE_URL="mysql://cmsusr:CmS&TrinitY@123@10.30.4.144:3306/CitizenPortalCMS"
+PORT=5000
+
+// server.js ========================================================================================================
+
+import dotenv from "dotenv";
+import express from "express";
+import routes from "./src/route/mainRoute.js";
+
+dotenv.config(); // Load environment variables from .env file
+
+const app = express();
+
+// while post parse the body
+app.use(express.json());
+
+app.use(routes);
+
+const PORT = process.env.PORT;
+app.listen(PORT, () => {
+  console.log("server started on port " + PORT);
+});
+
+
+
+
+
+
+
+
